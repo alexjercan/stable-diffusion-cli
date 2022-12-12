@@ -284,14 +284,56 @@ class PathImage(OptionImage):
 
 
 class CameraImage(OptionImage):
-    def get(self):
-        pass
+    def __init__(self):
+        super().__init__()
+        self._img = None
+
+    def get(self, encode):
+        vidcap = cv2.VideoCapture(0)
+
+        if vidcap.isOpened():
+            while(True):
+                _, frame = vidcap.read()
+
+                cv2.imshow("Frame",frame)
+                
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+        else:
+            logging.error("Cannot open camera")
+
+        vidcap.release()
+        cv2.destroyAllWindows()
+
+        img = Image.fromarray(frame)
+        img.thumbnail((512, 512), Image.Resampling.LANCZOS)
+
+        self._img = img
+
+        return encode(img)
+
+    @property
+    def start_step(self):
+        return 20
+
+    @property
+    def num_inference_steps(self):
+        return 30
+
+    @property
+    def width(self):
+        return self._img.width
+
+    @property
+    def height(self):
+        return self._img.height
 
 
 @dataclass
 class Options:
     prompt: str
     image: OptionImage
+    output: str
 
 
 def _info(opt: Options) -> None:
@@ -317,7 +359,7 @@ def main(opt: Options):
         start_step=start_step,
         num_inference_steps=num_inference_steps,
     )[0]
-    image.save(f"data/{prompt}.png")
+    image.save(f"{opt.output}/{prompt}.png")
 
     _, ax = plt.subplots(figsize=(10, 10))
     ax.imshow(image)
@@ -349,6 +391,13 @@ def get_options() -> Options:
         default=False,
         help="Use webcam to capture an image instead of source",
     )
+    parser.add_argument(
+        "--output",
+        dest="output",
+        type=str,
+        default="data",
+        help="Output directory to save the results to",
+    )
 
     args = parser.parse_args()
 
@@ -362,7 +411,10 @@ def get_options() -> Options:
     else:
         image = RandomImage()
 
-    return Options(prompt=args.prompt, image=image,)
+    output = args.output
+    os.makedirs(output, exist_ok=True)
+
+    return Options(prompt=args.prompt, image=image, output=output)
 
 
 if __name__ == "__main__":
